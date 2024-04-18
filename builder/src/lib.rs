@@ -48,6 +48,20 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 self
             }
 
+            pub fn build(&mut self) -> Result<#name, Box<dyn std::error::Error>> {
+   
+                Ok(
+                    #name{
+                        executable: self.executable.clone().ok_or("executable is required")?,
+                        args: self.args.clone().ok_or("args is required")?,
+                        env: self.env.clone().ok_or("env is required")?,
+                        current_dir: self.current_dir.clone().ok_or("current_dir is required")?,
+                    }
+                )
+
+            }
+
+
         }
 
 
@@ -68,3 +82,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
     expanded.into()
 
 }
+
+
+/*
+//     impl CommandBuilder {
+//         pub fn build(&mut self) -> Result<Command, Box<dyn Error>> {
+//             ...
+//         }
+//     }
+*/
