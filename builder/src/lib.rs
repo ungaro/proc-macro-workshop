@@ -8,7 +8,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     // you can debug the ast to see what it looks like by uncommenting the line below
     // need to have extra-traits feature on cargo.toml
-    // eprintln!("Debuging_here {:?}", ast);
+    //eprintln!("Debuging_here {:#?}", ast);
 
     let name = &ast.ident;
 
@@ -17,77 +17,74 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // get the original name's span to use in the new Ident
     let builder_ident = Ident::new(&builder_name, name.span());
 
+    // get fields from the struct
+    let fields = if let syn::Data::Struct(syn::DataStruct {
+        fields: syn::Fields::Named(syn::FieldsNamed { ref named, .. }),
+        ..
+    }) = ast.data
+    {
+        named
+    } else {
+        unimplemented!()
+    };
+
+    //eprintln!("Fields {:#?}", fields);
+
+    let optionized = fields.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        quote! { #name: std::option::Option<#ty> }
+    });
+
+    let methods = fields.iter().map(|f| {
+        let name = &f.ident;
+        let ty = &f.ty;
+        quote! {
+            pub fn #name(&mut self, #name: #ty) -> &mut Self {
+                self.#name = Some(#name);
+                self
+            }
+        }
+    });
+
+    let build_args = fields.iter().map(|f| {
+        let name = &f.ident;
+        quote! {
+            #name: self.#name.clone().ok_or(concat!(stringify!(#name), " is required"))?
+        }
+    });
+
+    let build_empty = fields.iter().map(|f| {
+        let name = &f.ident;
+        quote! { #name: None }
+    });
+
     let expanded = quote! {
-        pub struct #builder_ident {
-             executable: Option<String>,
-             args: Option<Vec<String>>,
-             env: Option<Vec<String>>,
-             current_dir: Option<String>,
-        }
 
+    pub struct #builder_ident {
+         #(#optionized,)*
+    }
 
-        impl #builder_ident{
+    impl #builder_ident{
+        #(#methods)*
 
-            pub fn executable(&mut self, executable: String) -> &mut Self {
-                self.executable = Some(executable);
-                self
-            }
-
-            pub fn args(&mut self, args: Vec<String>) -> &mut Self {
-                self.args = Some(args);
-                self
-            }
-
-            pub fn env(&mut self, env: Vec<String>) -> &mut Self {
-                self.env = Some(env);
-                self
-            }
-
-            pub fn current_dir(&mut self, current_dir: String) -> &mut Self {
-                self.current_dir = Some(current_dir);
-                self
-            }
-
-            pub fn build(&mut self) -> Result<#name, Box<dyn std::error::Error>> {
-   
-                Ok(
-                    #name{
-                        executable: self.executable.clone().ok_or("executable is required")?,
-                        args: self.args.clone().ok_or("args is required")?,
-                        env: self.env.clone().ok_or("env is required")?,
-                        current_dir: self.current_dir.clone().ok_or("current_dir is required")?,
-                    }
-                )
-
-            }
-
-
-        }
-
-
-            impl #name {
-                fn builder() -> #builder_ident {
-                    #builder_ident{
-                        executable: None,
-                        args: None,
-                        env: None,
-                        current_dir: None,
-                    }
+        pub fn build(&self) -> Result<#name, Box<dyn std::error::Error>> {
+            Ok(#name{
+                    #(#build_args,)*
                 }
+            )
+        }
+    }
 
-
+    impl #name {
+            fn builder() -> #builder_ident {
+                #builder_ident {
+                  #(#build_empty,)*
+                }
             }
-        };
+        }
+    };
 
     expanded.into()
-
 }
 
-
-/*
-//     impl CommandBuilder {
-//         pub fn build(&mut self) -> Result<Command, Box<dyn Error>> {
-//             ...
-//         }
-//     }
-*/
